@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { normalizeRawRow, parseOrdersCsv } from "../../src/modules/orders/orders.parser";
+import {
+  normalizeRawRow,
+  parseOrdersCsv,
+  parseOrdersFile,
+} from "../../src/modules/orders/orders.parser";
 import { writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
+import ExcelJS from "exceljs";
 
 describe("normalizeRawRow", () => {
   it("maps typo order_amout to order_amount", () => {
@@ -70,3 +75,37 @@ describe("parseOrdersCsv", () => {
   });
 });
 
+describe("parseOrdersFile (Excel XLSX)", () => {
+  it("streams and parses valid XLSX records and maps order_amout", async () => {
+    const tempXlsx = path.resolve("test-temp-orders.xlsx");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Orders");
+    ws.addRow(["order_id", "customer_id", "order_date", "order_amout", "status"]);
+    ws.addRow([
+      "550e8400-e29b-41d4-a716-446655440010",
+      "CUST_XLSX_1",
+      new Date("2026-10-05"),
+      2200.5,
+      "confirmed",
+    ]);
+    ws.addRow([
+      "invalid-uuid-xlsx",
+      "CUST_XLSX_2",
+      new Date("2026-10-06"),
+      500,
+      "pending",
+    ]);
+    await wb.xlsx.writeFile(tempXlsx);
+
+    try {
+      const result = await parseOrdersFile(tempXlsx);
+      expect(result.validOrders.length).toBe(1);
+      expect(result.invalidRows.length).toBe(1);
+      expect(result.validOrders[0].customer_id).toBe("CUST_XLSX_1");
+      expect(result.validOrders[0].order_amount).toBe(2200.5);
+      expect(result.invalidRows[0].row).toBe(3);
+    } finally {
+      await unlink(tempXlsx);
+    }
+  });
+});
