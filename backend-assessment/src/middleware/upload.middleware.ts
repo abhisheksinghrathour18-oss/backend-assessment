@@ -13,8 +13,9 @@ const storage = multer.diskStorage({
     callback(null, uploadDirectory);
   },
 
-  filename: (_req, _file, callback) => {
-    callback(null, `${randomUUID()}.csv`);
+  filename: (_req, file, callback) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    callback(null, `${randomUUID()}${ext || ".tmp"}`);
   },
 });
 
@@ -24,9 +25,10 @@ function fileFilter(
   callback: multer.FileFilterCallback,
 ) {
   const extension = path.extname(file.originalname).toLowerCase();
+  const allowedExtensions = [".csv", ".xlsx"];
 
-  if (extension !== ".csv") {
-    const error = new Error("Only CSV files are allowed");
+  if (!allowedExtensions.includes(extension)) {
+    const error = new Error("Only CSV and XLSX files are allowed");
     (error as unknown as { statusCode?: number }).statusCode = 400;
     return callback(error);
   }
@@ -34,7 +36,7 @@ function fileFilter(
   callback(null, true);
 }
 
-export const uploadCsv = multer({
+export const uploadFile = multer({
   storage,
   limits: {
     fileSize: env.UPLOAD_MAX_BYTES,
@@ -42,3 +44,6 @@ export const uploadCsv = multer({
   },
   fileFilter,
 }).single("file");
+
+// Retain uploadCsv export as alias for backward compatibility
+export const uploadCsv = uploadFile;

@@ -1,7 +1,9 @@
 import { Router } from "express";
-import { uploadCsv } from "../../middleware/upload.middleware";
+import { uploadFile } from "../../middleware/upload.middleware";
 import {
   uploadOrdersController,
+  uploadOrdersAsyncController,
+  getOrderJobStatusController,
   getOrdersByCustomerController,
   getOrderByIdController,
 } from "./orders.controller";
@@ -81,8 +83,66 @@ export const ordersRouter = Router();
  */
 ordersRouter.post(
   "/upload",
-  uploadCsv,
+  uploadFile,
   asyncHandler(uploadOrdersController),
+);
+
+/**
+ * @openapi
+ * /api/v1/orders/upload/async:
+ *   post:
+ *     tags:
+ *       - Orders
+ *     summary: Asynchronously upload and process an orders file in the background
+ *     description: Stores the uploaded file in configured storage and queues a background worker job via Redis and BullMQ. Returns HTTP 202 Accepted with a job ID for polling.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       202:
+ *         description: File successfully accepted and queued
+ *       400:
+ *         description: Missing or empty file
+ */
+ordersRouter.post(
+  "/upload/async",
+  uploadFile,
+  asyncHandler(uploadOrdersAsyncController),
+);
+
+/**
+ * @openapi
+ * /api/v1/orders/jobs/{jobId}:
+ *   get:
+ *     tags:
+ *       - Orders
+ *     summary: Get background ingestion job status and results
+ *     description: Returns the real-time processing status, progress, timestamps, and row statistics for a background job.
+ *     parameters:
+ *       - in: path
+ *         name: jobId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: BullMQ job identifier
+ *     responses:
+ *       200:
+ *         description: Job details and status
+ *       404:
+ *         description: Job not found
+ */
+ordersRouter.get(
+  "/jobs/:jobId",
+  asyncHandler(getOrderJobStatusController),
 );
 
 /**

@@ -3,8 +3,10 @@ import request from "supertest";
 import { app } from "../../src/app";
 import { closePools } from "../../src/infrastructure/database/pool";
 import { writeFile, unlink } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import ExcelJS from "exceljs";
 
 describe("API integration tests", () => {
   afterAll(async () => {
@@ -30,16 +32,16 @@ describe("API integration tests", () => {
     });
   });
 
-  describe("POST /api/v1/orders/upload validation", () => {
+  describe("File upload validation", () => {
     it("returns 400 when no file is uploaded", async () => {
       const response = await request(app).post("/api/v1/orders/upload");
 
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain("Please upload a CSV file");
+      expect(response.body.message).toContain("Please upload a CSV or XLSX file");
     });
 
-    it("returns 400 when a non-CSV file is uploaded", async () => {
+    it("returns 400 when a non-CSV/XLSX file is uploaded", async () => {
       const tempTxtFile = path.resolve("test-invalid-type.txt");
       await writeFile(tempTxtFile, "hello world", "utf-8");
 
@@ -50,7 +52,7 @@ describe("API integration tests", () => {
 
         expect(response.status).toBe(400);
         expect(response.body.success).toBe(false);
-        expect(response.body.message).toContain("Only CSV files are allowed");
+        expect(response.body.message).toContain("Only CSV and XLSX files are allowed");
       } finally {
         await unlink(tempTxtFile);
       }
@@ -67,14 +69,14 @@ describe("API integration tests", () => {
 
         expect(response.status).toBe(400);
         expect(response.body.success).toBe(false);
-        expect(response.body.message).toContain("Uploaded CSV file is empty");
+        expect(response.body.message).toContain("Uploaded file is empty");
       } finally {
         await unlink(tempEmptyCsv);
       }
     });
   });
 
-  describe("CSV Order Ingestion & Sharding", () => {
+  describe("CSV Order Ingestion, Storage Provider & Sharding", () => {
     const cust1 = `CUST_TEST_${Date.now()}_A`;
     const cust2 = `CUST_TEST_${Date.now()}_B`;
     const orderId1 = randomUUID();
@@ -100,7 +102,7 @@ describe("API integration tests", () => {
       }
     });
 
-    it("successfully uploads valid orders and routes across shards", async () => {
+    it("successfully uploads valid orders and stores original file in stub storage", async () => {
       const response = await request(app)
         .post("/api/v1/orders/upload")
         .attach("file", sampleCsv);
@@ -112,6 +114,11 @@ describe("API integration tests", () => {
       expect(response.body.data.duplicateRows).toBe(0);
       expect(response.body.data.invalidRows).toBe(0);
       expect(response.body.data.failedBatches).toBe(0);
+
+      // Verify stub storage reference
+      expect(response.body.data.storage).toBeDefined();
+      expect(response.body.data.storage.provider).toBe("stub");
+      expect(existsSync(response.body.data.storage.location)).toBe(true);
     });
 
     it("retrieves the uploaded order by orderId", async () => {
@@ -144,6 +151,41 @@ describe("API integration tests", () => {
       expect(response.body.data.validRows).toBe(2);
       expect(response.body.data.insertedRows).toBe(0);
       expect(response.body.data.duplicateRows).toBe(2);
+    });
+  });
+
+  describe("Assessment alias endpoint POST /upload-orders with XLSX", () => {
+    const custXlsx = `CUST_XLSX_${Date.now()}`;
+    const orderIdXlsx = randomUUID();
+    const sampleXlsx = path.resolve(`test-upload-${Date.now()}.xlsx`);
+
+    beforeAll(async () => {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Orders");
+      ws.addRow(["order_id", "customer_id", "order_date", "order_amount", "status"]);
+      ws.addRow([orderIdXlsx, custXlsx, new Date("2026-10-08"), 3400.0, "confirmed"]);
+      await wb.xlsx.writeFile(sampleXlsx);
+    });
+
+    afterAll(async () => {
+      try {
+        await unlink(sampleXlsx);
+      } catch {
+        // ignore
+      }
+    });
+
+    it("POST /upload-orders processes XLSX successfully through streaming pipeline", async () => {
+      const response = await request(app)
+        .post("/upload-orders")
+        .attach("file", sampleXlsx);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.validRows).toBe(1);
+      expect(response.body.data.insertedRows).toBe(1);
+      expect(response.body.data.storage.provider).toBe("stub");
+      expect(existsSync(response.body.data.storage.location)).toBe(true);
     });
   });
 

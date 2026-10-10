@@ -5,7 +5,7 @@ import {
   findOrdersByCustomerId,
   findOrderById,
 } from "./orders.repository";
-import { iterateOrdersCsv } from "./orders.parser";
+import { iterateOrdersFile } from "./orders.parser";
 import type {
   ParsedOrder,
   ProcessOrdersResult,
@@ -68,7 +68,7 @@ export async function processOrdersStream(
     }
   };
 
-  for await (const item of iterateOrdersCsv(filePath)) {
+  for await (const item of iterateOrdersFile(filePath)) {
     if (item.order) {
       validRows++;
       const shardId = getShardId(item.order.customer_id);
