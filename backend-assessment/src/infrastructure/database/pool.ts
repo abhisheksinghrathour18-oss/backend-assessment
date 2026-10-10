@@ -1,6 +1,6 @@
-
 import { Pool } from "pg";
 import type { shardId } from "./shard-router";
+import { env } from "../../config/env";
 
 const pools: Partial<Record<shardId, Pool>> = {};
 
@@ -21,8 +21,8 @@ export function getPool(shardId: shardId): Pool {
   if (!pools[shardId]) {
     const connectionString =
       shardId === 1
-        ? process.env.PG_SHARD_1_DB_URL
-        : process.env.PG_SHARD_2_DB_URL;
+        ? env.PG_SHARD_1_DB_URL
+        : env.PG_SHARD_2_DB_URL;
 
     pools[shardId] = createPool(connectionString);
   }
