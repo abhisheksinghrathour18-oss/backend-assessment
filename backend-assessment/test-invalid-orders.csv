@@ -1,0 +1,4 @@
+order_id,customer_id,order_date,order_amount,status
+550e8400-e29b-41d4-a716-446655440002,CUSTOMER_1,2026-10-03,1200.00,confirmed
+not-a-uuid,CUSTOMER_2,2026-10-03,900.00,pending
+550e8400-e29b-41d4-a716-446655440003,CUSTOMER_3,2026-10-04,-100.00,pending
