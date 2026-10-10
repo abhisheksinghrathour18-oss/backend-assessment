@@ -1,6 +1,11 @@
 node_modules/
-dist/
+/dist/
 .env
-uploads/
+/uploads/
+/storage/
 coverage/
 *.log
+.DS_Store
+test-*.csv
+test-*.xlsx
+*.docs/
